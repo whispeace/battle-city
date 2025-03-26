@@ -1,12 +1,9 @@
 import { ENTITY_TYPES, EFFECTS, DIRECTIONS, BULLET_TYPES, CANVAS_SIZE } from './constants';
 import { Entity } from './Entity';
 import { gameState } from './main';
-import { Particle } from './Particle';
-import { Spark } from './Spark';
-import { Explosion } from './Explosion';
+import { eventBus, GAME_EVENTS } from './EventBus';
 
 // Класс пули
-
 export class Bullet extends Entity {
   constructor(x, y, direction, ownerType, bulletType = BULLET_TYPES.REGULAR) {
     super(x, y, bulletType.size, bulletType.size, ENTITY_TYPES.BULLET);
@@ -82,6 +79,14 @@ export class Bullet extends Entity {
           this.y = this.y < 0 ? 0 : CANVAS_SIZE - this.height;
         }
 
+        // Генерируем событие отскока
+        eventBus.emit(GAME_EVENTS.BULLET_HIT, {
+          bullet: this,
+          type: 'bounce',
+          x: this.x,
+          y: this.y
+        });
+        
         // Создаем эффект искры при отскоке
         this.createSpark();
       } else {
@@ -111,6 +116,12 @@ export class Bullet extends Entity {
             break;
 
           case ENTITY_TYPES.BASE:
+            // Генерируем событие разрушения базы
+            eventBus.emit(GAME_EVENTS.BASE_DESTROY, {
+              base: entity,
+              bullet: this
+            });
+            
             entity.destroy();
             this.destroy(true);
             return;
@@ -129,12 +140,21 @@ export class Bullet extends Entity {
             if (entity.type !== this.ownerType &&
               !entity.destroyed &&
               !entity.shielded) {
+              
+              // Генерируем событие попадания в танк
+              eventBus.emit(GAME_EVENTS.BULLET_HIT, {
+                bullet: this,
+                target: entity,
+                type: 'tankHit'
+              });
+              
               entity.destroy();
 
               // Начисляем очки, если игрок подбил врага
               if (this.ownerType === ENTITY_TYPES.PLAYER &&
                 entity.type === ENTITY_TYPES.ENEMY) {
                 gameState.score += EFFECTS.DESTROY_SCORE;
+                eventBus.emit(GAME_EVENTS.SCORE_UPDATE, gameState.score);
               }
 
               this.destroy(true);
@@ -145,12 +165,13 @@ export class Bullet extends Entity {
       }
     }
 
-    // Проверяем столкновения с другими танками (для производительности проверяем отдельно)
+    // Проверяем столкновения с другими танками
     if (this.ownerType === ENTITY_TYPES.PLAYER) {
       for (const enemy of gameState.enemies) {
         if (!enemy.destroyed && !enemy.shielded && this.checkCollision(enemy)) {
           enemy.destroy();
           gameState.score += EFFECTS.DESTROY_SCORE;
+          eventBus.emit(GAME_EVENTS.SCORE_UPDATE, gameState.score);
           this.destroy(true);
           return;
         }
@@ -169,11 +190,14 @@ export class Bullet extends Entity {
     // Проверяем столкновения с другими пулями
     for (const bullet of gameState.bullets) {
       if (bullet !== this && this.checkCollision(bullet)) {
-        // Создаем большую искру при столкновении пуль
-        const sparkX = (this.x + bullet.x) / 2;
-        const sparkY = (this.y + bullet.y) / 2;
-        const spark = new Spark(sparkX, sparkY, 1.5); // Большая искра
-        gameState.entities.push(spark);
+        // Создаем большую искру при столкновении пуль через событие
+        eventBus.emit(GAME_EVENTS.BULLET_HIT, {
+          bullet: this,
+          otherBullet: bullet,
+          type: 'bulletCollision',
+          x: (this.x + bullet.x) / 2,
+          y: (this.y + bullet.y) / 2
+        });
 
         // Удаляем обе пули
         bullet.destroy(false);
@@ -189,12 +213,22 @@ export class Bullet extends Entity {
     if (index !== -1) {
       gameState.entities.splice(index, 1);
 
+      // Генерируем событие разрушения кирпича
+      eventBus.emit(GAME_EVENTS.BULLET_HIT, {
+        bullet: this,
+        target: brick,
+        type: 'brickDestroy',
+        x: brick.x,
+        y: brick.y
+      });
+
       // Создаем эффект разрушения кирпича
       this.createBrickParticles(brick);
 
       // Если игрок уничтожил кирпич, начисляем очки
       if (this.ownerType === ENTITY_TYPES.PLAYER) {
         gameState.score += EFFECTS.DAMAGE_SCORE;
+        eventBus.emit(GAME_EVENTS.SCORE_UPDATE, gameState.score);
       }
     }
 
@@ -214,12 +248,22 @@ export class Bullet extends Entity {
       if (index !== -1) {
         gameState.entities.splice(index, 1);
 
+        // Генерируем событие разрушения стальной стены
+        eventBus.emit(GAME_EVENTS.BULLET_HIT, {
+          bullet: this,
+          target: steel,
+          type: 'steelDestroy',
+          x: steel.x,
+          y: steel.y
+        });
+
         // Более мощный эффект разрушения для стальной стены
         this.createSteelParticles(steel);
 
         // Если игрок уничтожил стальную стену, начисляем больше очков
         if (this.ownerType === ENTITY_TYPES.PLAYER) {
           gameState.score += EFFECTS.DESTROY_SCORE;
+          eventBus.emit(GAME_EVENTS.SCORE_UPDATE, gameState.score);
         }
       }
       this.destroy(true);
@@ -240,6 +284,15 @@ export class Bullet extends Entity {
         this.direction = DIRECTIONS.LEFT;
       }
 
+      // Генерируем событие отскока
+      eventBus.emit(GAME_EVENTS.BULLET_HIT, {
+        bullet: this,
+        target: steel,
+        type: 'bounce',
+        x: this.x,
+        y: this.y
+      });
+
       // Создаем эффект искры при отскоке
       this.createSpark();
       return true;
@@ -251,38 +304,43 @@ export class Bullet extends Entity {
   }
 
   createSpark() {
-    const spark = new Spark(
-      this.x + this.width / 2 - 4,
-      this.y + this.height / 2 - 4
-    );
-    gameState.entities.push(spark);
+    // Генерируем событие создания искры
+    eventBus.emit(GAME_EVENTS.EFFECT_EXPLOSION, {
+      x: this.x + this.width / 2 - 4,
+      y: this.y + this.height / 2 - 4,
+      type: 'spark',
+      scale: 1.0,
+      duration: EFFECTS.SPARK_DURATION
+    });
   }
 
   createBrickParticles(brick) {
+    // Генерируем событие создания частиц для кирпича
     for (let i = 0; i < EFFECTS.BRICK_PARTICLES_COUNT; i++) {
-      const particle = new Particle(
-        brick.x + Math.random() * brick.width,
-        brick.y + Math.random() * brick.height,
-        '#CC6600',
-        Math.random() * 60 - 30, // Скорость по X: от -30 до 30
-        Math.random() * 60 - 30, // Скорость по Y: от -30 до 30
-        Math.random() * 4 + 2 // Размер: от 2 до 6
-      );
-      gameState.entities.push(particle);
+      eventBus.emit(GAME_EVENTS.EFFECT_EXPLOSION, {
+        x: brick.x + Math.random() * brick.width,
+        y: brick.y + Math.random() * brick.height,
+        type: 'particle',
+        color: '#CC6600',
+        velocityX: Math.random() * 60 - 30, // Скорость по X: от -30 до 30
+        velocityY: Math.random() * 60 - 30, // Скорость по Y: от -30 до 30
+        size: Math.random() * 4 + 2 // Размер: от 2 до 6
+      });
     }
   }
 
   createSteelParticles(steel) {
+    // Генерируем событие создания частиц для стальной стены
     for (let i = 0; i < EFFECTS.BRICK_PARTICLES_COUNT * 1.5; i++) {
-      const particle = new Particle(
-        steel.x + Math.random() * steel.width,
-        steel.y + Math.random() * steel.height,
-        '#AAAAAA',
-        Math.random() * 80 - 40, // Скорость по X: от -40 до 40
-        Math.random() * 80 - 40, // Скорость по Y: от -40 до 40
-        Math.random() * 3 + 1 // Размер: от 1 до 4
-      );
-      gameState.entities.push(particle);
+      eventBus.emit(GAME_EVENTS.EFFECT_EXPLOSION, {
+        x: steel.x + Math.random() * steel.width,
+        y: steel.y + Math.random() * steel.height,
+        type: 'particle',
+        color: '#AAAAAA',
+        velocityX: Math.random() * 80 - 40, // Скорость по X: от -40 до 40
+        velocityY: Math.random() * 80 - 40, // Скорость по Y: от -40 до 40
+        size: Math.random() * 3 + 1 // Размер: от 1 до 4
+      });
     }
   }
 
@@ -354,27 +412,34 @@ export class Bullet extends Entity {
       }
     }
 
+    // Генерируем событие уничтожения пули
+    eventBus.emit(GAME_EVENTS.BULLET_HIT, {
+      bullet: this,
+      type: 'destroy',
+      createEffect
+    });
+
     // Добавляем эффект попадания
     if (createEffect) {
       // Выбираем тип эффекта в зависимости от силы пули
       if (this.power >= 3) {
         // Тяжелая пуля создает большой взрыв
-        const explosion = new Explosion(
-          this.x - this.width * 2,
-          this.y - this.height * 2,
-          this.width * 5,
-          EFFECTS.EXPLOSION_DURATION / 2
-        );
-        gameState.entities.push(explosion);
+        eventBus.emit(GAME_EVENTS.EFFECT_EXPLOSION, {
+          x: this.x - this.width * 2,
+          y: this.y - this.height * 2,
+          size: this.width * 5,
+          duration: EFFECTS.EXPLOSION_DURATION / 2,
+          type: 'explosion'
+        });
       } else {
         // Обычная пуля создает искру
-        const spark = new Spark(
-          this.x - this.width / 2,
-          this.y - this.height / 2,
-          1.0,
-          EFFECTS.SPARK_DURATION
-        );
-        gameState.entities.push(spark);
+        eventBus.emit(GAME_EVENTS.EFFECT_EXPLOSION, {
+          x: this.x - this.width / 2,
+          y: this.y - this.height / 2,
+          scale: 1.0,
+          duration: EFFECTS.SPARK_DURATION,
+          type: 'spark'
+        });
       }
     }
   }

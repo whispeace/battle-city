@@ -1,10 +1,8 @@
-import { TILE_SIZE, ENTITY_TYPES, DIRECTIONS, BULLET_TYPES, CANVAS_SIZE } from './constants';
+import { TILE_SIZE, ENTITY_TYPES, DIRECTIONS, BULLET_TYPES, CANVAS_SIZE, EFFECTS } from './constants';
 import { Entity } from './Entity';
-import { gameState, addVisualEffect, updateUI, respawnPlayer, gameOver, nextLevel, spawnEnemy } from './main';
+import { gameState } from './main';
+import { eventBus, GAME_EVENTS } from './EventBus';
 import { Shield } from './Shield';
-import { Particle } from './Particle';
-import { Spark } from './Spark';
-import { Explosion } from './Explosion';
 import { Bullet } from './Bullet';
 import { Powerup } from './Powerup';
 
@@ -22,7 +20,7 @@ export class Tank extends Entity {
     this.animationFrame = 0;
     this.frameTime = 0;
 
-    // Новые свойства
+    // Свойства танка
     this.shielded = false; // Флаг наличия щита
     this.spawnProtectionTime = 0; // Время защиты после спавна
     this.maxSpawnProtectionTime = 2.0; // Длительность защиты после спавна
@@ -32,7 +30,6 @@ export class Tank extends Entity {
     this.isMoving = false; // Флаг движения
     this.blinkTime = 0; // Время для эффекта мерцания
     this.isBlinking = false; // Флаг мерцания
-
 
     // Параметры модификации танка
     this.powerLevel = 1; // Уровень силы (1-3)
@@ -250,6 +247,12 @@ export class Tank extends Entity {
 
     gameState.bullets.push(this.bullet);
 
+    // Генерируем событие выстрела
+    eventBus.emit(GAME_EVENTS.BULLET_FIRE, {
+      bullet: this.bullet,
+      owner: this
+    });
+
     // Время перезарядки зависит от модификаторов
     let cooldown = this.maxBulletCooldown;
     if (this.canShootFast) {
@@ -286,9 +289,14 @@ export class Tank extends Entity {
         break;
     }
 
-    // Создаем искру как эффект вспышки
-    const spark = new Spark(flashX, flashY, 0.8, 0.15);
-    gameState.entities.push(spark);
+    // Создаем искру как эффект вспышки через событие
+    eventBus.emit(GAME_EVENTS.EFFECT_EXPLOSION, {
+      x: flashX,
+      y: flashY,
+      type: 'spark',
+      scale: 0.8,
+      duration: 0.15
+    });
   }
 
   renderTracks(ctx) {
@@ -427,20 +435,45 @@ export class Tank extends Entity {
     // Создаем визуальный эффект щита
     const shield = new Shield(this);
     gameState.entities.push(shield);
+    
+    // Генерируем событие
+    eventBus.emit(GAME_EVENTS.POWERUP_COLLECT, {
+      type: 'shield',
+      tank: this
+    });
   }
 
   upgradeWeapon() {
     if (this.powerLevel < 3) {
       this.powerLevel++;
+      
+      // Генерируем событие
+      eventBus.emit(GAME_EVENTS.POWERUP_COLLECT, {
+        type: 'weapon',
+        tank: this,
+        level: this.powerLevel
+      });
     }
   }
 
   enableSpeedBoost() {
     this.canSpeedBoost = true;
+    
+    // Генерируем событие
+    eventBus.emit(GAME_EVENTS.POWERUP_COLLECT, {
+      type: 'speed',
+      tank: this
+    });
   }
 
   enableFastShoot() {
     this.canShootFast = true;
+    
+    // Генерируем событие
+    eventBus.emit(GAME_EVENTS.POWERUP_COLLECT, {
+      type: 'fastShoot',
+      tank: this
+    });
   }
 
   destroy() {
@@ -461,81 +494,27 @@ export class Tank extends Entity {
     }
 
     // Добавляем тряску экрана
-    addVisualEffect('screenShake', 5.0);
+    eventBus.emit(GAME_EVENTS.EFFECT_SCREEN_SHAKE, 5.0);
 
     // Добавляем кратковременную вспышку
-    addVisualEffect('flashWhite', 0.3);
+    eventBus.emit(GAME_EVENTS.EFFECT_FLASH, { type: 'flashWhite', intensity: 0.3 });
 
     this.destroyed = true;
 
     // Создаем эффект взрыва
-    const explosion = new Explosion(this.x - 8, this.y - 8, TILE_SIZE * 3);
-    gameState.entities.push(explosion);
-
-    // Создаем облако дыма и частицы
-    for (let i = 0; i < 12; i++) {
-      const particle = new Particle(
-        this.x + Math.random() * this.width,
-        this.y + Math.random() * this.height,
-        '#' + Math.floor(Math.random() * 16777215).toString(16), // Случайный цвет
-        Math.random() * 100 - 50, // Скорость X
-        Math.random() * 100 - 50, // Скорость Y
-        Math.random() * 5 + 2 // Размер
-      );
-      gameState.entities.push(particle);
-    }
+    eventBus.emit(GAME_EVENTS.EFFECT_EXPLOSION, {
+      x: this.x - 8,
+      y: this.y - 8,
+      size: TILE_SIZE * 3,
+      duration: EFFECTS.EXPLOSION_DURATION
+    });
 
     // Для игрока
     if (this.type === ENTITY_TYPES.PLAYER) {
-      gameState.playerLives--;
-      updateUI();
-
-      // Кратковременное замедление времени при смерти игрока
-      addVisualEffect('slowMotion');
-
-      if (gameState.playerLives > 0) {
-        // Восстанавливаем игрока на стартовой позиции
-        setTimeout(() => {
-          respawnPlayer();
-        }, 1500);
-      } else {
-        addVisualEffect('flashBlack', 0.7); // Затемнение экрана при конце игры
-        gameOver();
-      }
+      eventBus.emit(GAME_EVENTS.PLAYER_DESTROY, this);
     } else if (this.type === ENTITY_TYPES.ENEMY) {
       // Для врага
-      gameState.enemiesLeft--;
-      updateUI();
-
-      // Увеличиваем счет при уничтожении врага
-      gameState.score += 100;
-
-      // Удаляем врага из массива
-      const index = gameState.enemies.indexOf(this);
-      if (index !== -1) {
-        gameState.enemies.splice(index, 1);
-      }
-
-      // Шанс выпадения бонуса
-      if (Math.random() < 0.2) {
-        // 20% шанс
-        this.dropPowerup();
-      }
-
-      // Если врагов не осталось, переходим на следующий уровень
-      if (gameState.enemies.length === 0 && gameState.enemiesLeft === 0) {
-        // Эффект вспышки при завершении уровня
-        addVisualEffect('flashWhite', 0.7);
-
-        setTimeout(() => {
-          nextLevel();
-        }, 2000);
-      } else if (gameState.enemies.length < 4 && gameState.enemiesLeft > 0) {
-        // Спавним нового врага, если на поле меньше 4 и еще есть враги
-        setTimeout(() => {
-          spawnEnemy();
-        }, 2000);
-      }
+      eventBus.emit(GAME_EVENTS.ENEMY_DESTROY, this);
     }
   }
 
@@ -550,5 +529,13 @@ export class Tank extends Entity {
       type
     );
     gameState.entities.push(powerup);
+    
+    // Генерируем событие
+    eventBus.emit(GAME_EVENTS.POWERUP_SPAWN, {
+      powerup,
+      x: this.x + this.width / 4,
+      y: this.y + this.height / 4,
+      type
+    });
   }
 }

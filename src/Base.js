@@ -1,6 +1,6 @@
 import { TILE_SIZE, ENTITY_TYPES } from './constants';
 import { Entity } from './Entity';
-import { gameOver } from './main';
+import { eventBus, GAME_EVENTS } from './EventBus';
 
 // Класс базы (орёл)
 export class Base extends Entity {
@@ -33,6 +33,11 @@ export class Base extends Entity {
 
   destroy() {
     this.destroyed = true;
-    gameOver();
+    
+    // Генерируем событие уничтожения базы
+    eventBus.emit(GAME_EVENTS.BASE_DESTROY, { base: this });
+    
+    // Вызываем конец игры через событийную систему
+    eventBus.emit(GAME_EVENTS.GAME_OVER);
   }
 }

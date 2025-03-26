@@ -1,5 +1,6 @@
 import './style.css';
 import { TILE_SIZE, ENTITY_TYPES, CANVAS_SIZE } from './constants';
+import { eventBus, GAME_EVENTS } from './EventBus';
 import { Wall } from './Wall';
 import { Grass } from './Grass';
 import { Base } from './Base';
@@ -39,12 +40,6 @@ export const gameState = {
   },
 };
 
-// Спрайты и ресурсы
-const assets = {
-  loaded: false,
-  sprites: {},
-};
-
 // Инициализация игры
 function initGame() {
   const canvas = document.getElementById('gameCanvas');
@@ -62,6 +57,9 @@ function initGame() {
   const startButton = document.getElementById('startButton');
   startButton.addEventListener('click', startGame);
 
+  // Настраиваем обработчики событий UI
+  setupEventListeners();
+
   // Инициализация игрового состояния
   resetGameState();
 
@@ -69,14 +67,36 @@ function initGame() {
   requestAnimationFrame(gameLoop);
 }
 
+// Настройка всех слушателей событий
+function setupEventListeners() {
+  // Обновление интерфейса
+  eventBus.on(GAME_EVENTS.UI_UPDATE, updateAllUI);
+  eventBus.on(GAME_EVENTS.SCORE_UPDATE, updateScore);
+  eventBus.on(GAME_EVENTS.LIVES_UPDATE, updateLives);
+  eventBus.on(GAME_EVENTS.ENEMY_COUNT_UPDATE, updateEnemyCount);
+  eventBus.on(GAME_EVENTS.STAGE_UPDATE, updateStage);
+  
+  // События игрового процесса
+  eventBus.on(GAME_EVENTS.GAME_START, handleGameStart);
+  eventBus.on(GAME_EVENTS.GAME_OVER, handleGameOver);
+  eventBus.on(GAME_EVENTS.LEVEL_COMPLETE, handleLevelComplete);
+  eventBus.on(GAME_EVENTS.PLAYER_SPAWN, handlePlayerSpawn);
+  eventBus.on(GAME_EVENTS.PLAYER_DESTROY, handlePlayerDestroy);
+  eventBus.on(GAME_EVENTS.ENEMY_SPAWN, handleEnemySpawn);
+  eventBus.on(GAME_EVENTS.ENEMY_DESTROY, handleEnemyDestroy);
+  
+  // События визуальных эффектов
+  eventBus.on(GAME_EVENTS.EFFECT_SCREEN_SHAKE, (intensity) => addVisualEffect('screenShake', intensity));
+  eventBus.on(GAME_EVENTS.EFFECT_FLASH, (data) => addVisualEffect(data.type, data.intensity));
+  eventBus.on(GAME_EVENTS.EFFECT_SLOW_MOTION, () => addVisualEffect('slowMotion'));
+  eventBus.on(GAME_EVENTS.EFFECT_EXPLOSION, createExplosion);
+}
+
 // Обработчики клавиш
 function handleKeyDown(e) {
   if (gameState.keys.hasOwnProperty(e.key)) {
     gameState.keys[e.key] = true;
     e.preventDefault();
-
-    // Отладочная информация
-    console.log('Клавиша нажата:', e.key);
   }
 }
 
@@ -87,10 +107,41 @@ function handleKeyUp(e) {
   }
 }
 
-// Добавляем обработчик для всплывшей ошибки в консоли
-window.addEventListener('error', function (e) {
-  console.error('Ошибка игры:', e.message);
-});
+// Обновление элементов UI
+function updateAllUI() {
+  updateLives();
+  updateStage();
+  updateEnemyCount();
+  updateScore();
+  
+  // Добавляем анимацию к UI при обновлении
+  const uiContainer = document.querySelector('.ui-container');
+  uiContainer.style.animation = 'none';
+  void uiContainer.offsetWidth; // Trick to restart animation
+  uiContainer.style.animation = 'ui-update 0.3s';
+}
+
+function updateLives() {
+  document.getElementById('lives').innerText = `IP: ${gameState.playerLives}`;
+}
+
+function updateStage() {
+  document.getElementById('stage').innerText = `STAGE ${gameState.stage}`;
+}
+
+function updateEnemyCount() {
+  document.getElementById('enemies').innerText = `ENEMY: ${gameState.enemiesLeft}`;
+}
+
+function updateScore() {
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d');
+  
+  ctx.fillStyle = '#FFFFFF';
+  ctx.font = '14px Arial';
+  ctx.textAlign = 'right';
+  ctx.fillText(`SCORE: ${gameState.score}`, canvas.width - 10, 20);
+}
 
 // Сброс игрового состояния
 function resetGameState() {
@@ -102,11 +153,17 @@ function resetGameState() {
   gameState.playerLives = 3;
   gameState.enemiesLeft = 20;
   gameState.stage = 1;
+  gameState.score = 0;
 
   // Сброс нажатых клавиш
   Object.keys(gameState.keys).forEach((key) => {
     gameState.keys[key] = false;
   });
+  
+  // Сброс эффектов
+  gameState.effects.screenShake = 0;
+  gameState.effects.fadeEffect = 0;
+  gameState.effects.slowMotion = 1.0;
 }
 
 // Запуск игры
@@ -121,8 +178,167 @@ function startGame() {
   // Создаем уровень
   createLevel();
 
+  // Уведомляем о начале игры
+  eventBus.emit(GAME_EVENTS.GAME_START);
+  
   // Обновляем интерфейс
-  updateUI();
+  eventBus.emit(GAME_EVENTS.UI_UPDATE);
+}
+
+// Обработчики событий игрового процесса
+function handleGameStart() {
+  console.log('Игра началась');
+}
+
+function handleGameOver() {
+  gameState.isRunning = false;
+
+  // Добавляем эффект затемнения
+  eventBus.emit(GAME_EVENTS.EFFECT_FLASH, { type: 'flashBlack', intensity: 0.7 });
+
+  // Показываем стартовый экран с анимацией
+  const startScreen = document.getElementById('startScreen');
+  startScreen.style.display = 'none';
+  void startScreen.offsetWidth; // Trick to restart animation
+  startScreen.style.animation = 'fadeIn 1s forwards';
+  startScreen.style.display = 'flex';
+
+  // Отображаем результаты игры
+  const title = document.querySelector('#startScreen h1');
+  title.textContent = 'GAME OVER';
+
+  // Создаем элемент со счетом
+  const scoreElement = document.createElement('div');
+  scoreElement.textContent = `SCORE: ${gameState.score}`;
+  scoreElement.style.fontSize = '24px';
+  scoreElement.style.margin = '10px 0';
+
+  // Проверяем, есть ли уже отображение счета
+  const existingScore = document.querySelector('#startScreen .score-display');
+  if (existingScore) {
+    existingScore.textContent = scoreElement.textContent;
+  } else {
+    scoreElement.className = 'score-display';
+    // Вставляем перед кнопкой
+    const button = document.querySelector('#startScreen button');
+    button.parentNode.insertBefore(scoreElement, button);
+  }
+
+  // Меняем текст кнопки
+  document.getElementById('startButton').innerText = 'ИГРАТЬ СНОВА';
+}
+
+function handleLevelComplete() {
+  // Добавляем очки за завершение уровня
+  gameState.score += 1000 + gameState.stage * 500;
+
+  gameState.stage++;
+  gameState.enemiesLeft = 20;
+  gameState.entities = [];
+  gameState.bullets = [];
+  gameState.enemies = [];
+
+  // Сброс замедления времени
+  gameState.effects.slowMotion = 1.0;
+
+  // Добавляем визуальный эффект перехода
+  eventBus.emit(GAME_EVENTS.EFFECT_FLASH, { type: 'flashWhite', intensity: 0.7 });
+
+  createLevel();
+  eventBus.emit(GAME_EVENTS.UI_UPDATE);
+  eventBus.emit(GAME_EVENTS.STAGE_UPDATE);
+}
+
+function handlePlayerSpawn() {
+  const player = new Player(
+    CANVAS_SIZE / 2 - TILE_SIZE,
+    CANVAS_SIZE - TILE_SIZE * 3
+  );
+  gameState.player = player;
+  gameState.entities.push(player);
+}
+
+function handlePlayerDestroy() {
+  gameState.playerLives--;
+  eventBus.emit(GAME_EVENTS.LIVES_UPDATE);
+
+  // Кратковременное замедление времени при смерти игрока
+  eventBus.emit(GAME_EVENTS.EFFECT_SLOW_MOTION);
+
+  if (gameState.playerLives > 0) {
+    // Восстанавливаем игрока на стартовой позиции
+    setTimeout(() => {
+      eventBus.emit(GAME_EVENTS.PLAYER_SPAWN);
+    }, 1500);
+  } else {
+    eventBus.emit(GAME_EVENTS.EFFECT_FLASH, { type: 'flashBlack', intensity: 0.7 });
+    eventBus.emit(GAME_EVENTS.GAME_OVER);
+  }
+}
+
+function handleEnemySpawn(position) {
+  if (!gameState.isRunning || gameState.enemiesLeft <= 0) return;
+
+  // Если позиция не указана, выбираем случайную
+  if (!position) {
+    // Возможные позиции спавна (верхние углы и центр)
+    const spawnPositions = [
+      { x: 0, y: 0 },
+      { x: CANVAS_SIZE - TILE_SIZE * 2, y: 0 },
+      { x: CANVAS_SIZE / 2 - TILE_SIZE, y: 0 },
+    ];
+
+    // Выбираем случайную позицию
+    position = spawnPositions[Math.floor(Math.random() * spawnPositions.length)];
+  }
+
+  const enemy = new Enemy(position.x, position.y);
+  gameState.enemies.push(enemy);
+  gameState.entities.push(enemy);
+  
+  eventBus.emit(GAME_EVENTS.ENEMY_COUNT_UPDATE);
+}
+
+function handleEnemyDestroy(enemy) {
+  gameState.enemiesLeft--;
+  eventBus.emit(GAME_EVENTS.ENEMY_COUNT_UPDATE);
+
+  // Увеличиваем счет при уничтожении врага
+  gameState.score += 100;
+  eventBus.emit(GAME_EVENTS.SCORE_UPDATE);
+
+  // Удаляем врага из массива
+  const index = gameState.enemies.indexOf(enemy);
+  if (index !== -1) {
+    gameState.enemies.splice(index, 1);
+  }
+
+  // Шанс выпадения бонуса
+  if (Math.random() < 0.2) {
+    // 20% шанс
+    enemy.dropPowerup();
+  }
+
+  // Если врагов не осталось, переходим на следующий уровень
+  if (gameState.enemies.length === 0 && gameState.enemiesLeft === 0) {
+    // Эффект вспышки при завершении уровня
+    eventBus.emit(GAME_EVENTS.EFFECT_FLASH, { type: 'flashWhite', intensity: 0.7 });
+
+    setTimeout(() => {
+      eventBus.emit(GAME_EVENTS.LEVEL_COMPLETE);
+    }, 2000);
+  } else if (gameState.enemies.length < 4 && gameState.enemiesLeft > 0) {
+    // Спавним нового врага, если на поле меньше 4 и еще есть враги
+    setTimeout(() => {
+      eventBus.emit(GAME_EVENTS.ENEMY_SPAWN);
+    }, 2000);
+  }
+}
+
+// Создание эффекта взрыва
+function createExplosion(data) {
+  const explosion = new Explosion(data.x, data.y, data.size, data.duration);
+  gameState.entities.push(explosion);
 }
 
 // Создание уровня
@@ -181,125 +397,34 @@ function createLevel() {
   }
 
   // Создаем игрока
-  spawnPlayer();
+  eventBus.emit(GAME_EVENTS.PLAYER_SPAWN);
 
   // Спавним начальных врагов
   for (let i = 0; i < 4; i++) {
-    spawnEnemy();
+    eventBus.emit(GAME_EVENTS.ENEMY_SPAWN);
   }
 }
 
-// Спавн игрока
-function spawnPlayer() {
-  const player = new Player(
-    CANVAS_SIZE / 2 - TILE_SIZE,
-    CANVAS_SIZE - TILE_SIZE * 3
-  );
-  gameState.player = player;
-  gameState.entities.push(player);
-}
-
-// Респавн игрока
-export function respawnPlayer() {
-  if (!gameState.isRunning) return;
-
-  spawnPlayer();
-}
-
-// Спавн врага
-export function spawnEnemy() {
-  if (!gameState.isRunning || gameState.enemiesLeft <= 0) return;
-
-  // Возможные позиции спавна (верхние углы и центр)
-  const spawnPositions = [
-    { x: 0, y: 0 },
-    { x: CANVAS_SIZE - TILE_SIZE * 2, y: 0 },
-    { x: CANVAS_SIZE / 2 - TILE_SIZE, y: 0 },
-  ];
-
-  // Выбираем случайную позицию
-  const pos = spawnPositions[Math.floor(Math.random() * spawnPositions.length)];
-
-  const enemy = new Enemy(pos.x, pos.y);
-  gameState.enemies.push(enemy);
-  gameState.entities.push(enemy);
-}
-
-// Обновление UI
-export function updateUI() {
-  document.getElementById('lives').innerText = `IP: ${gameState.playerLives}`;
-  document.getElementById('stage').innerText = `STAGE ${gameState.stage}`;
-  document.getElementById(
-    'enemies'
-  ).innerText = `ENEMY: ${gameState.enemiesLeft}`;
-
-  // Добавляем анимацию к UI при обновлении
-  const uiContainer = document.querySelector('.ui-container');
-  uiContainer.style.animation = 'none';
-  void uiContainer.offsetWidth; // Trick to restart animation
-  uiContainer.style.animation = 'ui-update 0.3s';
-}
-
-// Следующий уровень
-export function nextLevel() {
-  if (!gameState.isRunning) return;
-
-  // Добавляем очки за завершение уровня
-  gameState.score += 1000 + gameState.stage * 500;
-
-  gameState.stage++;
-  gameState.enemiesLeft = 20;
-  gameState.entities = [];
-  gameState.bullets = [];
-  gameState.enemies = [];
-
-  // Сброс замедления времени
-  gameState.effects.slowMotion = 1.0;
-
-  // Добавляем визуальный эффект перехода
-  addVisualEffect('flashWhite', 0.7);
-
-  createLevel();
-  updateUI();
-}
-
-// Конец игры
-export function gameOver() {
-  gameState.isRunning = false;
-
-  // Добавляем эффект затемнения
-  addVisualEffect('flashBlack', 0.7);
-
-  // Показываем стартовый экран с анимацией
-  const startScreen = document.getElementById('startScreen');
-  startScreen.style.display = 'none';
-  void startScreen.offsetWidth; // Trick to restart animation
-  startScreen.style.animation = 'fadeIn 1s forwards';
-  startScreen.style.display = 'flex';
-
-  // Отображаем результаты игры
-  const title = document.querySelector('#startScreen h1');
-  title.textContent = 'GAME OVER';
-
-  // Создаем элемент со счетом
-  const scoreElement = document.createElement('div');
-  scoreElement.textContent = `SCORE: ${gameState.score}`;
-  scoreElement.style.fontSize = '24px';
-  scoreElement.style.margin = '10px 0';
-
-  // Проверяем, есть ли уже отображение счета
-  const existingScore = document.querySelector('#startScreen .score-display');
-  if (existingScore) {
-    existingScore.textContent = scoreElement.textContent;
-  } else {
-    scoreElement.className = 'score-display';
-    // Вставляем перед кнопкой
-    const button = document.querySelector('#startScreen button');
-    button.parentNode.insertBefore(scoreElement, button);
+// Вспомогательная функция для добавления визуальных эффектов
+export function addVisualEffect(effectType, intensity = 1.0) {
+  switch (effectType) {
+    case 'screenShake':
+      gameState.effects.screenShake = intensity;
+      break;
+    case 'flashWhite':
+      gameState.effects.fadeEffect = intensity;
+      break;
+    case 'flashBlack':
+      gameState.effects.fadeEffect = -intensity;
+      break;
+    case 'slowMotion':
+      gameState.effects.slowMotion = 0.5; // Замедляем игру в 2 раза
+      // Возвращаем нормальную скорость через секунду
+      setTimeout(() => {
+        gameState.effects.slowMotion = 1.0;
+      }, 1000);
+      break;
   }
-
-  // Меняем текст кнопки
-  document.getElementById('startButton').innerText = 'ИГРАТЬ СНОВА';
 }
 
 // Игровой цикл
@@ -450,11 +575,8 @@ function gameLoop(timestamp) {
     }
   }
 
-  // Отображение счёта и другой информации
-  ctx.fillStyle = '#FFFFFF';
-  ctx.font = '14px Arial';
-  ctx.textAlign = 'right';
-  ctx.fillText(`SCORE: ${gameState.score}`, canvas.width - 10, 20);
+  // Отображение счёта
+  updateScore();
 
   // Если была применена тряска экрана, восстанавливаем состояние
   if (gameState.effects.screenShake > 0) {
@@ -465,109 +587,31 @@ function gameLoop(timestamp) {
   requestAnimationFrame(gameLoop);
 }
 
-// Вспомогательная функция для добавления визуальных эффектов
-export function addVisualEffect(effectType, intensity = 1.0) {
-  switch (effectType) {
-    case 'screenShake':
-      gameState.effects.screenShake = intensity;
-      break;
-    case 'flashWhite':
-      gameState.effects.fadeEffect = intensity;
-      break;
-    case 'flashBlack':
-      gameState.effects.fadeEffect = -intensity;
-      break;
-    case 'slowMotion':
-      gameState.effects.slowMotion = 0.5; // Замедляем игру в 2 раза
-      // Возвращаем нормальную скорость через секунду
-      setTimeout(() => {
-        gameState.effects.slowMotion = 1.0;
-      }, 1000);
-      break;
-  }
-}
-
-// Обновляем метод destroy в Tank для поддержки новых эффектов
-function destroyWithEffects() {
-  // Добавляем тряску экрана
-  addVisualEffect('screenShake', 5.0);
-
-  // Добавляем кратковременную вспышку
-  addVisualEffect('flashWhite', 0.3);
-
-  // Создаем эффект взрыва с частицами
-  const explosion = new Explosion(this.x - 8, this.y - 8, TILE_SIZE * 3);
-  gameState.entities.push(explosion);
-
-  // Создаем облако дыма и частицы
-  for (let i = 0; i < 12; i++) {
-    const particle = new Particle(
-      this.x + Math.random() * this.width,
-      this.y + Math.random() * this.height,
-      '#' + Math.floor(Math.random() * 16777215).toString(16), // Случайный цвет
-      Math.random() * 100 - 50, // Скорость X
-      Math.random() * 100 - 50, // Скорость Y
-      Math.random() * 5 + 2 // Размер
-    );
-    gameState.entities.push(particle);
-  }
-
-  // Применяем оригинальную логику destroy
-  this.destroyed = true;
-
-  // Для игрока
-  if (this.type === ENTITY_TYPES.PLAYER) {
-    gameState.playerLives--;
-    updateUI();
-
-    // Кратковременное замедление времени при смерти игрока
-    addVisualEffect('slowMotion');
-
-    if (gameState.playerLives > 0) {
-      // Восстанавливаем игрока на стартовой позиции
-      setTimeout(() => {
-        respawnPlayer();
-      }, 1500);
-    } else {
-      addVisualEffect('flashBlack', 0.7); // Затемнение экрана при конце игры
-      gameOver();
-    }
-  } else if (this.type === ENTITY_TYPES.ENEMY) {
-    // Для врага
-    gameState.enemiesLeft--;
-    updateUI();
-
-    // Увеличиваем счет при уничтожении врага
-    gameState.score += 100;
-
-    // Удаляем врага из массива
-    const index = gameState.enemies.indexOf(this);
-    if (index !== -1) {
-      gameState.enemies.splice(index, 1);
-    }
-
-    // Шанс выпадения бонуса
-    if (Math.random() < 0.2) {
-      // 20% шанс
-      this.dropPowerup();
-    }
-
-    // Если врагов не осталось, переходим на следующий уровень
-    if (gameState.enemies.length === 0 && gameState.enemiesLeft === 0) {
-      // Эффект вспышки при завершении уровня
-      addVisualEffect('flashWhite', 0.7);
-
-      setTimeout(() => {
-        nextLevel();
-      }, 2000);
-    } else if (gameState.enemies.length < 4 && gameState.enemiesLeft > 0) {
-      // Воскрешаем нового врага, если на поле меньше 4 и еще есть враги
-      setTimeout(() => {
-        spawnEnemy();
-      }, 2000);
-    }
-  }
-}
-
 // Инициализируем игру при загрузке страницы
 window.addEventListener('load', initGame);
+
+// Функции-адаптеры для совместимости со старым кодом
+export function spawnPlayer() {
+  eventBus.emit(GAME_EVENTS.PLAYER_SPAWN);
+}
+
+export function respawnPlayer() {
+  if (!gameState.isRunning) return;
+  eventBus.emit(GAME_EVENTS.PLAYER_SPAWN);
+}
+
+export function spawnEnemy() {
+  eventBus.emit(GAME_EVENTS.ENEMY_SPAWN);
+}
+
+export function gameOver() {
+  eventBus.emit(GAME_EVENTS.GAME_OVER);
+}
+
+export function nextLevel() {
+  eventBus.emit(GAME_EVENTS.LEVEL_COMPLETE);
+}
+
+export function updateUI() {
+  eventBus.emit(GAME_EVENTS.UI_UPDATE);
+}

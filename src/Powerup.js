@@ -1,8 +1,7 @@
 import { TILE_SIZE, ENTITY_TYPES, EFFECTS } from './constants';
 import { Entity } from './Entity';
-import { gameState, updateUI } from './main';
-import { Particle } from './Particle';
-import { Spark } from './Spark';
+import { gameState } from './main';
+import { eventBus, GAME_EVENTS } from './EventBus';
 
 // Класс бонуса (powerup)
 export class Powerup extends Entity {
@@ -55,6 +54,14 @@ export class Powerup extends Entity {
       this.checkCollision(gameState.player)) {
       this.applyPowerup();
 
+      // Генерируем событие подбора бонуса
+      eventBus.emit(GAME_EVENTS.POWERUP_COLLECT, {
+        type: this.powerUpType,
+        tank: gameState.player,
+        x: this.x,
+        y: this.y
+      });
+
       // Удаляем бонус
       const index = gameState.entities.indexOf(this);
       if (index !== -1) {
@@ -88,7 +95,7 @@ export class Powerup extends Entity {
         break;
       case 'life':
         gameState.playerLives++;
-        updateUI();
+        eventBus.emit(GAME_EVENTS.LIVES_UPDATE);
         break;
     }
 
@@ -97,7 +104,7 @@ export class Powerup extends Entity {
 
     // Добавляем очки
     gameState.score += 500;
-    updateUI();
+    eventBus.emit(GAME_EVENTS.SCORE_UPDATE, gameState.score);
   }
 
   createPickupEffect() {
@@ -105,23 +112,28 @@ export class Powerup extends Entity {
     const centerX = this.x + this.width / 2;
     const centerY = this.y + this.height / 2;
 
-    // Создаем частицы вокруг
+    // Генерируем событие создания частиц вокруг
     for (let i = 0; i < 8; i++) {
       const angle = (i / 8) * Math.PI * 2;
-      const particle = new Particle(
-        centerX,
-        centerY,
-        this.color,
-        Math.cos(angle) * 50,
-        Math.sin(angle) * 50,
-        4
-      );
-      gameState.entities.push(particle);
+      eventBus.emit(GAME_EVENTS.EFFECT_EXPLOSION, {
+        x: centerX,
+        y: centerY,
+        type: 'particle',
+        color: this.color,
+        velocityX: Math.cos(angle) * 50,
+        velocityY: Math.sin(angle) * 50,
+        size: 4
+      });
     }
 
-    // Создаем вспышку
-    const spark = new Spark(centerX - 8, centerY - 8, 2, 0.5);
-    gameState.entities.push(spark);
+    // Генерируем событие создания вспышки
+    eventBus.emit(GAME_EVENTS.EFFECT_EXPLOSION, {
+      x: centerX - 8,
+      y: centerY - 8,
+      type: 'spark',
+      scale: 2,
+      duration: 0.5
+    });
   }
 
   render(ctx) {
