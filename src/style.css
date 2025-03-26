@@ -1,0 +1,139 @@
+body {
+  margin: 0;
+  padding: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  background-color: #222;
+  font-family: 'Courier New', monospace;
+}
+
+.game-container {
+  position: relative;
+}
+
+canvas {
+  background-color: #000;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+.ui-container {
+  position: absolute;
+  right: -100px;
+  top: 0;
+  color: #fff;
+  padding: 10px;
+  width: 90px;
+}
+
+.ui-container div {
+  margin-bottom: 10px;
+}
+
+.start-screen {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.8);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  color: #fff;
+}
+
+.start-screen button {
+  margin-top: 20px;
+  padding: 10px 20px;
+  background-color: #555;
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  font-family: 'Courier New', monospace;
+}
+
+.start-screen button:hover {
+  background-color: #777;
+}
+
+/* Анимации */
+@keyframes ui-update {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes blink {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+.score-display {
+  animation: blink 1s infinite;
+  color: #ffcc00;
+}
+
+/* Эффект перехода между уровнями */
+@keyframes levelTransition {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 0.5;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Эффект повреждения (для щита) */
+@keyframes damageFlash {
+  0% {
+    background-color: rgba(255, 0, 0, 0.2);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+/* Эффект при получении бонуса */
+@keyframes powerupGlow {
+  0% {
+    text-shadow: 0 0 5px #ffff00;
+  }
+  50% {
+    text-shadow: 0 0 20px #ffff00;
+  }
+  100% {
+    text-shadow: 0 0 5px #ffff00;
+  }
+}
