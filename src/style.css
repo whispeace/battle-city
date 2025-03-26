@@ -1,37 +1,89 @@
-body {
+:root {
+  --ui-bg-color: rgba(0, 0, 0, 0.7);
+  --ui-text-color: #fff;
+  --ui-highlight-color: #ffcc00;
+  --game-bg-color: #222;
+}
+
+* {
+  box-sizing: border-box;
   margin: 0;
   padding: 0;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  touch-action: none;
+}
+
+body {
   display: flex;
-  justify-content: center;
-  align-items: center;
-  height: 100vh;
-  background-color: #222;
   font-family: 'Courier New', monospace;
+  background-color: var(--game-bg-color);
+  color: var(--ui-text-color);
+}
+
+.game-wrapper {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .game-container {
   position: relative;
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
 }
 
 canvas {
+  display: block;
   background-color: #000;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
+  max-width: 100%;
+  max-height: 100%;
 }
 
+/* Адаптивный UI-контейнер */
 .ui-container {
   position: absolute;
-  right: -100px;
-  top: 0;
-  color: #fff;
   padding: 10px;
-  width: 90px;
+  background-color: var(--ui-bg-color);
+  border-radius: 5px;
+  z-index: 10;
+}
+
+/* UI в зависимости от ориентации экрана */
+@media (orientation: landscape) {
+  .ui-container {
+    top: 10px;
+    right: 10px;
+    min-width: 90px;
+  }
+}
+
+@media (orientation: portrait) {
+  .ui-container {
+    top: 10px;
+    left: 10px;
+    right: 10px;
+    display: flex;
+    justify-content: space-between;
+  }
 }
 
 .ui-container div {
   margin-bottom: 10px;
+  text-shadow: 1px 1px 2px #000;
 }
 
+/* Начальный экран */
 .start-screen {
   position: absolute;
   top: 0;
@@ -43,97 +95,147 @@ canvas {
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  color: #fff;
+  z-index: 20;
+}
+
+.start-screen h1 {
+  font-size: 2rem;
+  margin-bottom: 1rem;
+  text-align: center;
 }
 
 .start-screen button {
-  margin-top: 20px;
   padding: 10px 20px;
   background-color: #555;
   color: #fff;
   border: none;
   cursor: pointer;
   font-family: 'Courier New', monospace;
+  font-size: 1rem;
+  transition: background-color 0.2s;
 }
 
 .start-screen button:hover {
   background-color: #777;
 }
 
+/* Виртуальные кнопки для сенсорных устройств */
+.touch-controls {
+  display: none;
+  position: relative;
+  padding: 10px;
+  height: 180px;
+  background-color: var(--ui-bg-color);
+}
+
+/* Показываем сенсорные элементы управления только на тач-устройствах */
+@media (pointer: coarse) {
+  .touch-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  
+  /* Уменьшаем высоту игрового контейнера для тач-интерфейса */
+  .game-container {
+    height: calc(100% - 180px);
+  }
+}
+
+.d-pad {
+  position: relative;
+  width: 120px;
+  height: 120px;
+}
+
+.btn-direction {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  background-color: #555;
+  border: none;
+  border-radius: 5px;
+}
+
+.btn-direction:active {
+  background-color: var(--ui-highlight-color);
+}
+
+.btn-up {
+  top: 0;
+  left: 40px;
+  clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+}
+
+.btn-right {
+  top: 40px;
+  right: 0;
+  clip-path: polygon(0% 0%, 0% 100%, 100% 50%);
+}
+
+.btn-down {
+  bottom: 0;
+  left: 40px;
+  clip-path: polygon(0% 0%, 100% 0%, 50% 100%);
+}
+
+.btn-left {
+  top: 40px;
+  left: 0;
+  clip-path: polygon(0% 50%, 100% 0%, 100% 100%);
+}
+
+.btn-fire {
+  width: 80px;
+  height: 80px;
+  background-color: #cc3333;
+  border: none;
+  border-radius: 50%;
+  color: #fff;
+  font-weight: bold;
+}
+
+.btn-fire:active {
+  background-color: #ee5555;
+  transform: scale(0.95);
+}
+
 /* Анимации */
 @keyframes ui-update {
-  0% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.1);
-  }
-  100% {
-    transform: scale(1);
-  }
+  0% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); }
 }
 
 @keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 @keyframes blink {
-  0% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.3;
-  }
-  100% {
-    opacity: 1;
-  }
+  0% { opacity: 1; }
+  50% { opacity: 0.3; }
+  100% { opacity: 1; }
 }
 
 .score-display {
   animation: blink 1s infinite;
-  color: #ffcc00;
+  color: var(--ui-highlight-color);
 }
 
-/* Эффект перехода между уровнями */
 @keyframes levelTransition {
-  0% {
-    transform: scale(1);
-    opacity: 1;
-  }
-  50% {
-    transform: scale(1.1);
-    opacity: 0.5;
-  }
-  100% {
-    transform: scale(1);
-    opacity: 1;
-  }
+  0% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.1); opacity: 0.5; }
+  100% { transform: scale(1); opacity: 1; }
 }
 
-/* Эффект повреждения (для щита) */
 @keyframes damageFlash {
-  0% {
-    background-color: rgba(255, 0, 0, 0.2);
-  }
-  100% {
-    background-color: transparent;
-  }
+  0% { background-color: rgba(255, 0, 0, 0.2); }
+  100% { background-color: transparent; }
 }
 
-/* Эффект при получении бонуса */
 @keyframes powerupGlow {
-  0% {
-    text-shadow: 0 0 5px #ffff00;
-  }
-  50% {
-    text-shadow: 0 0 20px #ffff00;
-  }
-  100% {
-    text-shadow: 0 0 5px #ffff00;
-  }
+  0% { text-shadow: 0 0 5px #ffff00; }
+  50% { text-shadow: 0 0 20px #ffff00; }
+  100% { text-shadow: 0 0 5px #ffff00; }
 }

@@ -2,20 +2,32 @@
 <html lang="ru">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>Battle City</title>
   </head>
   <body>
-    <div class="game-container">
-      <canvas id="gameCanvas" width="416" height="416"></canvas>
-      <div class="ui-container">
-        <div id="lives">IP: 3</div>
-        <div id="stage">STAGE 1</div>
-        <div id="enemies">ENEMY: 20</div>
+    <div class="game-wrapper">
+      <div class="game-container">
+        <canvas id="gameCanvas"></canvas>
+        <div class="ui-container">
+          <div id="lives">IP: 3</div>
+          <div id="stage">STAGE 1</div>
+          <div id="enemies">ENEMY: 20</div>
+          <div id="score">СЧЕТ: 0</div>
+        </div>
+        <div id="startScreen" class="start-screen">
+          <h1>BATTLE CITY</h1>
+          <button id="startButton">НАЧАТЬ ИГРУ</button>
+        </div>
       </div>
-      <div id="startScreen" class="start-screen">
-        <h1>BATTLE CITY</h1>
-        <button id="startButton">НАЧАТЬ ИГРУ</button>
+      <div id="touchControls" class="touch-controls">
+        <div class="d-pad">
+          <button id="btnUp" class="btn-direction btn-up"></button>
+          <button id="btnRight" class="btn-direction btn-right"></button>
+          <button id="btnDown" class="btn-direction btn-down"></button>
+          <button id="btnLeft" class="btn-direction btn-left"></button>
+        </div>
+        <button id="btnFire" class="btn-fire">ОГОНЬ</button>
       </div>
     </div>
     <script type="module" src="/src/main.js"></script>

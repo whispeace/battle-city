@@ -87,5 +87,13 @@ export const GAME_EVENTS = {
   EFFECT_SCREEN_SHAKE: 'effect:screenShake',
   EFFECT_FLASH: 'effect:flash',
   EFFECT_SLOW_MOTION: 'effect:slowMotion',
-  EFFECT_EXPLOSION: 'effect:explosion'
+  EFFECT_EXPLOSION: 'effect:explosion',
+  
+  // Новые события для адаптивного интерфейса
+  RESIZE: 'ui:resize',
+  DEVICE_TYPE_CHANGE: 'ui:deviceTypeChange',
+  ORIENTATION_CHANGE: 'ui:orientationChange',
+  TOUCH_START: 'input:touchStart',
+  TOUCH_MOVE: 'input:touchMove',
+  TOUCH_END: 'input:touchEnd'
 };

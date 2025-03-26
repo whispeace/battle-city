@@ -8,6 +8,14 @@ import { Player } from './Player';
 import { Enemy } from './Enemy';
 import { Explosion } from './Explosion';
 import { Particle } from './Particle';
+import { ResizeService, resizeService } from './services/ResizeService'
+
+// Дополнение к константам для мобильных событий
+export const GAME_EVENTS_MOBILE = {
+  TOUCH_START: 'touch:start',
+  TOUCH_MOVE: 'touch:move',
+  TOUCH_END: 'touch:end'
+};
 
 // Игровое состояние
 export const gameState = {
@@ -38,6 +46,13 @@ export const gameState = {
     fadeEffect: 0, // Эффект затемнения/осветления экрана
     slowMotion: 1.0, // Замедление времени (1.0 = нормальная скорость)
   },
+  // Поля для адаптивного интерфейса
+  viewport: {
+    scale: 1.0,
+    width: CANVAS_SIZE,
+    height: CANVAS_SIZE,
+    isMobile: false
+  }
 };
 
 // Инициализация игры
@@ -48,6 +63,10 @@ function initGame() {
   // Установка размеров canvas
   canvas.width = CANVAS_SIZE;
   canvas.height = CANVAS_SIZE;
+
+  // Инициализация сервиса масштабирования
+  resizeService.init(canvas);
+
 
   // Обработчики клавиш
   window.addEventListener('keydown', handleKeyDown);
@@ -90,6 +109,36 @@ function setupEventListeners() {
   eventBus.on(GAME_EVENTS.EFFECT_FLASH, (data) => addVisualEffect(data.type, data.intensity));
   eventBus.on(GAME_EVENTS.EFFECT_SLOW_MOTION, () => addVisualEffect('slowMotion'));
   eventBus.on(GAME_EVENTS.EFFECT_EXPLOSION, createExplosion);
+
+  // Обработчик изменения размера
+  eventBus.on(GAME_EVENTS.RESIZE, handleResize);
+
+  // Обработчик изменения типа устройства
+  eventBus.on(GAME_EVENTS.DEVICE_TYPE_CHANGE, handleDeviceTypeChange);
+}
+
+// Обработчик события изменения размера
+function handleResize(data) {
+  gameState.viewport = {
+    scale: data.scale,
+    width: data.width,
+    height: data.height,
+    isMobile: data.isMobile
+  };
+  
+  // Обновляем интерфейс
+  updateAllUI();
+}
+
+// Обработчик изменения типа устройства
+function handleDeviceTypeChange(data) {
+  gameState.viewport.isMobile = data.isMobile;
+  
+  // Показываем/скрываем элементы управления для сенсорных устройств
+  const touchControls = document.getElementById('touchControls');
+  if (touchControls) {
+    touchControls.style.display = data.isMobile ? 'flex' : 'none';
+  }
 }
 
 // Обработчики клавиш
@@ -107,6 +156,7 @@ function handleKeyUp(e) {
   }
 }
 
+
 // Обновление элементов UI
 function updateAllUI() {
   updateLives();
@@ -116,9 +166,11 @@ function updateAllUI() {
   
   // Добавляем анимацию к UI при обновлении
   const uiContainer = document.querySelector('.ui-container');
-  uiContainer.style.animation = 'none';
-  void uiContainer.offsetWidth; // Trick to restart animation
-  uiContainer.style.animation = 'ui-update 0.3s';
+  if (uiContainer) {
+    uiContainer.style.animation = 'none';
+    void uiContainer.offsetWidth; // Trick to restart animation
+    uiContainer.style.animation = 'ui-update 0.3s';
+  }
 }
 
 function updateLives() {
@@ -134,13 +186,11 @@ function updateEnemyCount() {
 }
 
 function updateScore() {
-  const canvas = document.getElementById('gameCanvas');
-  const ctx = canvas.getContext('2d');
-  
-  ctx.fillStyle = '#FFFFFF';
-  ctx.font = '14px Arial';
-  ctx.textAlign = 'right';
-  ctx.fillText(`SCORE: ${gameState.score}`, canvas.width - 10, 20);
+  // Обновление элемента счета вместо рисования на холсте
+  const scoreElement = document.getElementById('score');
+  if (scoreElement) {
+    scoreElement.innerText = `СЧЕТ: ${gameState.score}`;
+  }
 }
 
 // Сброс игрового состояния
